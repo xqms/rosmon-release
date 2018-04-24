@@ -211,9 +211,11 @@ void NodeMonitor::start()
 			for(auto part : cmd)
 				ss << part << " ";
 
-			log("Could not execute '%s': %s\n", ss.str().c_str(), strerror(errno));
+			fprintf(stderr, "Could not execute '%s': %s\n", ss.str().c_str(), strerror(errno));
 		}
-		exit(1);
+
+		// We should not end up here...
+		std::abort();
 	}
 
 	// Parent
@@ -333,9 +335,16 @@ void NodeMonitor::communicate()
 #ifdef WCOREDUMP
 		if(WCOREDUMP(status))
 		{
-			// We have a chance to find the core dump...
-			log("%s left a core dump", name().c_str());
-			gatherCoredump(WTERMSIG(status));
+			if(!m_launchNode->launchPrefix().empty())
+			{
+				log("%s used launch-prefix, not collecting core dump as it is probably useless.", name().c_str());
+			}
+			else
+			{
+				// We have a chance to find the core dump...
+				log("%s left a core dump", name().c_str());
+				gatherCoredump(WTERMSIG(status));
+			}
 		}
 #endif
 
