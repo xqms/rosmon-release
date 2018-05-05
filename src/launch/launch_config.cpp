@@ -5,11 +5,12 @@
 #include "substitution.h"
 
 #include <ros/package.h>
+#include <ros/names.h>
 
+#include <cctype>
+#include <cstdarg>
+#include <cstdio>
 #include <fstream>
-
-#include <stdarg.h>
-#include <stdio.h>
 
 #include <boost/regex.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -55,7 +56,7 @@ static std::string simplifyWhitespace(const std::string& input)
 	size_t i = 0;
 	for(; i < input.size(); ++i)
 	{
-		if(!isspace(i))
+		if(!std::isspace(static_cast<unsigned char>(input[i])))
 			break;
 	}
 
@@ -65,7 +66,7 @@ static std::string simplifyWhitespace(const std::string& input)
 	{
 		char c = input[i];
 
-		if(isspace(c))
+		if(std::isspace(static_cast<unsigned char>(c)))
 			in_space = true;
 		else
 		{
@@ -80,11 +81,33 @@ static std::string simplifyWhitespace(const std::string& input)
 	return output;
 }
 
-std::string ParseContext::evaluate(const std::string& tpl)
+/**
+ * @brief Check if string is whitespace only (includes '\n')
+ **/
+static bool isOnlyWhitespace(const std::string& input)
 {
+	for(const char& c: input)
+	{
+		// see http://en.cppreference.com/w/cpp/string/byte/isspace
+		// for reason for casting
+		if(!std::isspace(static_cast<unsigned char>(c)))
+			return false;
+	}
+
+	return true;
+}
+
+std::string ParseContext::evaluate(const std::string& tpl, bool simplifyWhitespace)
+{
+	std::string simplified;
+	if(simplifyWhitespace)
+		simplified = rosmon::launch::simplifyWhitespace(tpl);
+	else
+		simplified = tpl;
+
 	try
 	{
-		return parseSubstitutionArgs(tpl, *this);
+		return parseSubstitutionArgs(simplified, *this);
 	}
 	catch(SubstitutionException& e)
 	{
@@ -98,30 +121,33 @@ bool ParseContext::parseBool(const std::string& value, int line)
 
 	if(expansion == "1" || expansion == "true")
 		return true;
-	else if(expansion == "0" || expansion == "false")
+
+	if(expansion == "0" || expansion == "false")
 		return false;
-	else
-		throw error("%s:%d: Unknown truth value '%s'", filename().c_str(), line, expansion.c_str());
+
+	throw error("%s:%d: Unknown truth value '%s'", filename().c_str(), line, expansion.c_str());
 }
 
 bool ParseContext::shouldSkip(TiXmlElement* e)
 {
 	const char* if_cond = e->Attribute("if");
-	if(if_cond)
+	const char* unless_cond = e->Attribute("unless");
+
+	if(if_cond && unless_cond)
 	{
-		if(parseBool(if_cond, e->Row()))
-			return false;
-		else
-			return true;
+		throw error("%s:%d: both if= and unless= specified, don't know what to do",
+			filename().c_str(), e->Row()
+		);
 	}
 
-	const char* unless_cond = e->Attribute("unless");
+	if(if_cond)
+	{
+		return !parseBool(if_cond, e->Row());
+	}
+
 	if(unless_cond)
 	{
-		if(parseBool(unless_cond, e->Row()))
-			return true;
-		else
-			return false;
+		return parseBool(unless_cond, e->Row());
 	}
 
 	return false;
@@ -144,10 +170,6 @@ void ParseContext::setEnvironment(const std::string& name, const std::string& va
 LaunchConfig::LaunchConfig()
  : m_rootContext(this)
  , m_anonGen(std::random_device()())
-{
-}
-
-LaunchConfig::~LaunchConfig()
 {
 }
 
@@ -371,16 +393,31 @@ void LaunchConfig::parseParam(TiXmlElement* element, ParseContext ctx)
 		);
 	}
 
-	std::string fullName;
-	if(name[0] == '/')
-		fullName = ctx.evaluate(name);
-	else
-		fullName = ctx.prefix() + ctx.evaluate(name);
+	std::string fullName = ctx.evaluate(name);
+
+	// Expand relative paths
+	if(fullName[0] != '/')
+	{
+		// We silently ignore "~" at the beginning of the name
+		if(fullName[0] == '~')
+			fullName = fullName.substr(1);
+
+		fullName = ctx.prefix() + fullName;
+	}
+
+	std::string errorStr;
+	if(!ros::names::validate(fullName, errorStr))
+	{
+		throw error("File %s:%d: expanded parameter name '%s' is invalid: %s\n",
+			ctx.filename().c_str(), element->Row(),
+			fullName.c_str(), errorStr.c_str()
+		);
+	}
 
 	if(value)
 	{
 		const char* type = element->Attribute("type");
-		std::string fullValue = ctx.evaluate(simplifyWhitespace(value));
+		std::string fullValue = ctx.evaluate(value);
 
 		XmlRpc::XmlRpcValue result;
 
@@ -464,7 +501,7 @@ void LaunchConfig::parseParam(TiXmlElement* element, ParseContext ctx)
 						close(pipe_fd[1]);
 					}
 
-					char* argp[] = {strdup("sh"), strdup("-c"), strdup(fullCommand.c_str()), NULL};
+					char* argp[] = {strdup("sh"), strdup("-c"), strdup(fullCommand.c_str()), nullptr};
 
 					execvp("sh", argp); // should never return
 					throw error("Could not execvp '%s': %s", fullCommand.c_str(), strerror(errno));
@@ -473,6 +510,7 @@ void LaunchConfig::parseParam(TiXmlElement* element, ParseContext ctx)
 				close(pipe_fd[1]);
 
 				timeval timeout;
+				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = 0;
 				timeout.tv_usec = 500 * 1000;
 
@@ -482,7 +520,7 @@ void LaunchConfig::parseParam(TiXmlElement* element, ParseContext ctx)
 					FD_ZERO(&fds);
 					FD_SET(pipe_fd[0], &fds);
 
-					int ret = select(pipe_fd[0]+1, &fds, 0, 0, &timeout);
+					int ret = select(pipe_fd[0]+1, &fds, nullptr, nullptr, &timeout);
 					if(ret < 0)
 						throw error("Could not select(): %s", strerror(errno));
 
@@ -565,13 +603,29 @@ void LaunchConfig::parseROSParam(TiXmlElement* element, ParseContext ctx)
 			contents = buffer.str();
 		}
 		else
-			contents = element->GetText();
+		{
+			if(const char* t = element->GetText())
+				contents = t;
+		}
+
+		// roslaunch silently ignores empty files (which are not valid YAML),
+		// so do the same here.
+		if(isOnlyWhitespace(contents))
+			return;
 
 		const char* subst_value = element->Attribute("subst_value");
 		if(subst_value && strcmp(subst_value, "true") == 0)
-			contents = ctx.evaluate(contents);
+			contents = ctx.evaluate(contents, false);
 
-		YAML::Node n = YAML::Load(contents);
+		YAML::Node n;
+		try
+		{
+			n = YAML::Load(contents);
+		}
+		catch(YAML::ParserException& e)
+		{
+			throw error("%s:%d: Could not parse YAML: %s", ctx.filename().c_str(), element->Row(), e.what());
+		}
 
 		const char* ns = element->Attribute("ns");
 		if(ns)
@@ -661,9 +715,9 @@ XmlRpc::XmlRpcValue LaunchConfig::yamlToXmlRpc(const YAML::Node& n)
 	// Check if a YAML tag is present
 	if(n.Tag() == "!!int")
 		return XmlRpc::XmlRpcValue(n.as<int>());
-	else if(n.Tag() == "!!float")
+	if(n.Tag() == "!!float")
 		return XmlRpc::XmlRpcValue(n.as<double>());
-	else if(n.Tag() == "!!bool")
+	if(n.Tag() == "!!bool")
 		return XmlRpc::XmlRpcValue(n.as<bool>());
 
 	// Otherwise, we simply have to try things one by one...
@@ -714,6 +768,7 @@ void LaunchConfig::parseInclude(TiXmlElement* element, ParseContext ctx)
 {
 	const char* file = element->Attribute("file");
 	const char* ns = element->Attribute("ns");
+	const char* passAllArgs = element->Attribute("pass_all_args");
 
 	if(!file)
 		throw error("%s:%d: file attribute is mandatory", ctx.filename().c_str(), element->Row());
@@ -725,8 +780,12 @@ void LaunchConfig::parseInclude(TiXmlElement* element, ParseContext ctx)
 		childCtx = childCtx.enterScope(ctx.evaluate(ns));
 
 	// Parse any arguments
-	childCtx.clearArguments();
 
+	// If pass_all_args is not set, delete the current arguments.
+	if(!passAllArgs || !ctx.parseBool(passAllArgs, element->Row()))
+		childCtx.clearArguments();
+
+	// Now set all explicitly mentioned arguments.
 	for(TiXmlNode* n = element->FirstChild(); n; n = n->NextSibling())
 	{
 		TiXmlElement* e = n->ToElement();
