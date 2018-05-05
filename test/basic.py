@@ -80,6 +80,19 @@ class BasicTest(unittest.TestCase):
 		self.assertEqual(rospy.get_param("eval_argexpr"), True)
 		self.assertAlmostEqual(rospy.get_param("eval_radius_pi"), 0.5 * math.pi)
 
+		self.assertEqual(rospy.get_param("/test1/private_param1"), "hello_world")
+		self.assertEqual(rospy.get_param("/test1/private_param2"), "hello_world")
+
+	def test_multiLine(self):
+		self.assertEqual(rospy.get_param("multiple_lines1"), "first_line second_line")
+		self.assertEqual(rospy.get_param("multiple_lines2"), "first_line second_line")
+
+	def test_yaml(self):
+		self.assertAlmostEqual(rospy.get_param("yaml/radius"), 0.5)
+
+	def test_arg_passing(self):
+		self.assertEqual(rospy.get_param("test_argument"), 123)
+
 if __name__ == '__main__':
 	rospy.init_node('basic_test')
 
