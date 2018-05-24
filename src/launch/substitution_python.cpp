@@ -21,20 +21,6 @@ namespace rosmon
 namespace launch
 {
 
-static SubstitutionException error(const char* fmt, ...)
-{
-	va_list args;
-	va_start(args, fmt);
-
-	char str[1024];
-
-	vsnprintf(str, sizeof(str), fmt, args);
-
-	va_end(args);
-
-	return SubstitutionException(str);
-}
-
 #if HAVE_PYTHON
 
 template<class F>
@@ -148,40 +134,57 @@ std::string evaluatePython(const std::string& input, ParseContext& context)
 		PyObject *e, *v, *t;
 		PyErr_Fetch(&e, &v, &t);
 
-		// A NULL e means that there is not available Python
-		// exception
-		if(v)
+		try
 		{
-			std::string strErrorMessage = py::extract<std::string>(v);
-			ss << strErrorMessage;
+			py::object t = py::extract<py::object>(e);
+			py::object t_name = t.attr("__name__");
+			std::string typestr = py::extract<std::string>(t_name);
+
+			ss << typestr << ": ";
 		}
-		throw error(ss.str().c_str());
+		catch(py::error_already_set const &)
+		{}
+
+		try
+		{
+			py::object vo = py::extract<py::object>(v);
+			std::string valuestr = py::extract<std::string>(vo.attr("__str__")());
+
+			ss << valuestr;
+		}
+		catch(py::error_already_set const &)
+		{
+			ss << "<no str() handler>";
+		}
+
+		throw SubstitutionException(ss.str());
 	}
 
-	py::extract<std::string> asString(result);
-	if(asString.check())
-	{
-		return asString();
-	}
+	if(PyString_Check(result.ptr()))
+		return py::extract<std::string>(result);
 
-	py::extract<bool> asBool(result);
-	if(asBool.check())
+	if(PyBool_Check(result.ptr()))
 	{
-		if(asBool())
+		if(py::extract<bool>(result))
 			return "true";
 		else
 			return "false";
 	}
 
-	py::extract<int> asInt(result);
-	if(asInt.check())
-		return std::to_string(asInt());
+	if(PyInt_Check(result.ptr()))
+	{
+		return std::to_string(py::extract<int>(result));
+	}
 
-	py::extract<float> asFloat(result);
-	if(asFloat.check())
-		return boost::lexical_cast<std::string>(asFloat()); // to_string has low precision
+	if(PyFloat_Check(result.ptr()))
+	{
+		// std::to_string has low precision here, so use boost::lexical_cast
+		return boost::lexical_cast<std::string>(
+			py::extract<float>(result)()
+		);
+	}
 
-	throw error("$(eval '%s'): Got unknown python return type", input.c_str());
+	throw SubstitutionException::format("$(eval '{}'): Got unknown python return type", input);
 }
 
 #else // HAVE_PYTHON
