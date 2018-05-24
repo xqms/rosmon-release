@@ -25,20 +25,14 @@
 #include <boost/range.hpp>
 #include <boost/algorithm/string.hpp>
 
+#include <fmt/format.h>
+
 #define TASK_COMM_LEN 16 // from linux/sched.h
 
-static std::runtime_error error(const char* fmt, ...)
+template<typename... Args>
+std::runtime_error error(const char* fmt, const Args& ... args)
 {
-	va_list args;
-	va_start(args, fmt);
-
-	char str[1024];
-
-	vsnprintf(str, sizeof(str), fmt, args);
-
-	va_end(args);
-
-	return std::runtime_error(str);
+	return std::runtime_error(fmt::format(fmt, args...));
 }
 
 static bool g_coreIsRelative = true;
@@ -60,13 +54,15 @@ NodeMonitor::NodeMonitor(launch::Node::ConstPtr launchNode, FDWatcher::Ptr fdWat
 	m_restartTimer = nh.createWallTimer(ros::WallDuration(1.0), boost::bind(&NodeMonitor::start, this), false, false);
 	m_stopCheckTimer = nh.createWallTimer(ros::WallDuration(5.0), boost::bind(&NodeMonitor::checkStop, this));
 
+	m_processWorkingDirectory = m_launchNode->workingDirectory();
+
 	if(!g_coreIsRelative_valid)
 	{
 		char core_pattern[256];
 		int core_fd = open("/proc/sys/kernel/core_pattern", O_RDONLY | O_CLOEXEC);
 		if(core_fd < 0)
 		{
-			log("could not open /proc/sys/kernel/core_pattern: %s", strerror(errno));
+			log("could not open /proc/sys/kernel/core_pattern: {}", strerror(errno));
 			return;
 		}
 
@@ -75,7 +71,7 @@ NodeMonitor::NodeMonitor(launch::Node::ConstPtr launchNode, FDWatcher::Ptr fdWat
 
 		if(bytes < 1)
 		{
-			log("Could not read /proc/sys/kernel/core_pattern: %s", strerror(errno));
+			log("Could not read /proc/sys/kernel/core_pattern: {}", strerror(errno));
 			return;
 		}
 
@@ -96,8 +92,8 @@ std::vector<std::string> NodeMonitor::composeCommand() const
 {
 	if(m_launchNode->executable().empty())
 	{
-		throw error("Could not find node '%s' in package '%s'",
-			m_launchNode->type().c_str(), m_launchNode->package().c_str()
+		throw error("Could not find node '{}' in package '{}'",
+			m_launchNode->type(), m_launchNode->package()
 		);
 	}
 
@@ -134,19 +130,20 @@ void NodeMonitor::start()
 	if(running())
 		return;
 
-	if(m_launchNode->coredumpsEnabled() && g_coreIsRelative)
+	if(m_launchNode->coredumpsEnabled() && g_coreIsRelative && m_processWorkingDirectory.empty())
 	{
 		char tmpfile[256];
 		strncpy(tmpfile, "/tmp/rosmon-node-XXXXXX", sizeof(tmpfile));
 		tmpfile[sizeof(tmpfile)-1] = 0;
 		m_processWorkingDirectory = mkdtemp(tmpfile);
+		m_processWorkingDirectoryCreated = true;
 	}
 
 	ROS_INFO("rosmon: starting '%s'", m_launchNode->name().c_str());
 
 	int pid = forkpty(&m_fd, nullptr, nullptr, nullptr);
 	if(pid < 0)
-		throw error("Could not fork with forkpty(): %s", strerror(errno));
+		throw error("Could not fork with forkpty(): {}", strerror(errno));
 
 	if(pid == 0)
 	{
@@ -210,7 +207,7 @@ void NodeMonitor::start()
 			for(const auto& part : cmd)
 				ss << part << " ";
 
-			fprintf(stderr, "Could not execute '%s': %s\n", ss.str().c_str(), strerror(errno));
+			fmt::print(stderr, "Could not execute '{}': {}\n", ss.str(), strerror(errno));
 		}
 
 		// We should not end up here...
@@ -315,18 +312,18 @@ void NodeMonitor::communicate()
 			if(errno == EINTR || errno == EAGAIN)
 				continue;
 
-			throw error("%s: Could not waitpid(): %s", m_launchNode->name().c_str(), strerror(errno));
+			throw error("{}: Could not waitpid(): {}", m_launchNode->name(), strerror(errno));
 		}
 
 		if(WIFEXITED(status))
 		{
-			log("%s exited with status %d", name().c_str(), WEXITSTATUS(status));
+			log("{} exited with status {}", name(), WEXITSTATUS(status));
 			ROS_INFO("rosmon: %s exited with status %d", name().c_str(), WEXITSTATUS(status));
 			m_exitCode = WEXITSTATUS(status);
 		}
 		else if(WIFSIGNALED(status))
 		{
-			log("%s died from signal %d", name().c_str(), WTERMSIG(status));
+			log("{} died from signal {}", name(), WTERMSIG(status));
 			ROS_ERROR("rosmon: %s died from signal %d", name().c_str(), WTERMSIG(status));
 			m_exitCode = 255;
 		}
@@ -336,23 +333,23 @@ void NodeMonitor::communicate()
 		{
 			if(!m_launchNode->launchPrefix().empty())
 			{
-				log("%s used launch-prefix, not collecting core dump as it is probably useless.", name().c_str());
+				log("{} used launch-prefix, not collecting core dump as it is probably useless.", name());
 			}
 			else
 			{
 				// We have a chance to find the core dump...
-				log("%s left a core dump", name().c_str());
+				log("{} left a core dump", name());
 				gatherCoredump(WTERMSIG(status));
 			}
 		}
 #endif
 
-		if(!m_processWorkingDirectory.empty())
+		if(m_processWorkingDirectoryCreated)
 		{
 			if(rmdir(m_processWorkingDirectory.c_str()) != 0)
 			{
-				log("Could not remove process working directory '%s' after process exit: %s",
-					m_processWorkingDirectory.c_str(), strerror(errno)
+				log("Could not remove process working directory '{}' after process exit: {}",
+					m_processWorkingDirectory, strerror(errno)
 				);
 			}
 			m_processWorkingDirectory.clear();
@@ -381,7 +378,7 @@ void NodeMonitor::communicate()
 	}
 
 	if(bytes < 0)
-		throw error("%s: Could not read: %s", name().c_str(), strerror(errno));
+		throw error("{}: Could not read: {}", name(), strerror(errno));
 
 	for(int i = 0; i < bytes; ++i)
 	{
@@ -399,18 +396,10 @@ void NodeMonitor::communicate()
 	}
 }
 
-void NodeMonitor::log(const char* fmt, ...)
+template<typename... Args>
+void NodeMonitor::log(const char* format, const Args& ... args)
 {
-	static char buf[512];
-
-	va_list v;
-	va_start(v, fmt);
-
-	vsnprintf(buf, sizeof(buf), fmt, v);
-
-	va_end(v);
-
-	logMessageSignal(name(), buf);
+	logMessageSignal(name(), fmt::format(format, args...));
 }
 
 static boost::iterator_range<std::string::const_iterator>
@@ -431,7 +420,7 @@ void NodeMonitor::gatherCoredump(int signal)
 	int core_fd = open("/proc/sys/kernel/core_pattern", O_RDONLY | O_CLOEXEC);
 	if(core_fd < 0)
 	{
-		log("could not open /proc/sys/kernel/core_pattern: %s", strerror(errno));
+		log("could not open /proc/sys/kernel/core_pattern: {}", strerror(errno));
 		return;
 	}
 
@@ -440,7 +429,7 @@ void NodeMonitor::gatherCoredump(int signal)
 
 	if(bytes < 1)
 	{
-		log("Could not read /proc/sys/kernel/core_pattern: %s", strerror(errno));
+		log("Could not read /proc/sys/kernel/core_pattern: {}", strerror(errno));
 		return;
 	}
 
@@ -507,7 +496,7 @@ void NodeMonitor::gatherCoredump(int signal)
 	if(coreGlob[0] != '/')
 		coreGlob = m_processWorkingDirectory + "/" + coreGlob;
 
-	log("Determined pattern '%s'", coreGlob.c_str());
+	log("Determined pattern '{}'", coreGlob);
 
 	glob_t results;
 	memset(&results, 0, sizeof(results));
@@ -530,7 +519,7 @@ void NodeMonitor::gatherCoredump(int signal)
 	std::string coreFile = results.gl_pathv[0];
 	globfree(&results);
 
-	log("Found core file '%s'", coreFile.c_str());
+	log("Found core file '{}'", coreFile);
 
 	std::stringstream ss;
 
@@ -554,7 +543,7 @@ void NodeMonitor::launchDebugger()
 
 	if(!getenv("DISPLAY"))
 	{
-		log("No X11 available, run gdb yourself: %s", cmd.c_str());
+		log("No X11 available, run gdb yourself: {}", cmd);
 	}
 	else
 	{
@@ -567,7 +556,7 @@ void NodeMonitor::launchDebugger()
 		else if(getenv("VTE_VERSION"))
 			term = "gnome-terminal -e";
 
-		log("Launching debugger: '%s'", cmd.c_str());
+		log("Launching debugger: '{}'", cmd);
 
 		// system() is not particularly elegant here, but we trust our cmd.
 		if(system((term + " '" + cmd + "' &").c_str()) != 0)
