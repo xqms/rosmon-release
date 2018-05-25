@@ -1,3 +1,26 @@
+## rosmon (kinetic) - 1.0.5-0
+
+The packages in the `rosmon` repository were released into the `kinetic` distro by running `/usr/bin/bloom-release --rosdistro kinetic --track kinetic rosmon` on `Fri, 25 May 2018 15:22:22 -0000`
+
+The `rosmon` package was released.
+
+Version of package(s) in repository `rosmon`:
+
+- upstream repository: https://github.com/xqms/rosmon.git
+- release repository: https://github.com/xqms/rosmon-release.git
+- rosdistro version: `1.0.4-0`
+- old version: `1.0.4-0`
+- new version: `1.0.5-0`
+
+Versions of tools used:
+
+- bloom version: `0.6.4`
+- catkin_pkg version: `0.4.2`
+- rosdep version: `0.12.2`
+- rosdistro version: `0.6.8`
+- vcstools version: `0.1.40`
+
+
 ## rosmon (lunar) - 1.0.4-0
 
 The packages in the `rosmon` repository were released into the `lunar` distro by running `/usr/bin/bloom-release --rosdistro lunar --track lunar rosmon` on `Thu, 24 May 2018 14:18:46 -0000`
