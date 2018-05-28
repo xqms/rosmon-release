@@ -2,6 +2,30 @@
 Changelog for package rosmon
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.0.7 (2018-05-27)
+------------------
+* Support Python 3 & select appropriate Python version.
+  This fixes a mismatch on Debian Jessie, where rospack is linked against
+  Python 2.7 and we would link against Python 3.4.
+* launch: substitution_python: support Python 3
+* Contributors: Max Schwarz
+
+1.0.6 (2018-05-26)
+------------------
+* test/xml: replace more multiline string Catch captures
+  Sorry, somehow these slipped through - and I didn't have a good way of
+  testing these locally without the buildfarm. I'm testing with gcc 4.8
+  on trusty now, which seems to have matching behavior.
+* Contributors: Max Schwarz
+
+1.0.5 (2018-05-25)
+------------------
+* test/xml: avoid multiline Catch captures in exception tests
+  These trigger some weird bug between g++ 5.4 and ccache, which is used
+  in the ROS buildfarm. [...]
+  This should fix compilation on the build farm.
+* Contributors: Max Schwarz
+
 1.0.4 (2018-05-24)
 ------------------
 * Merge pull request `#30 <https://github.com/xqms/rosmon/issues/30>`_ from xqms/feature/global_remap
