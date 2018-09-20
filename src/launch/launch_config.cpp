@@ -86,6 +86,14 @@ static bool isOnlyWhitespace(const std::string& input)
 	return true;
 }
 
+ParseContext ParseContext::enterScope(const std::string& prefix)
+{
+	ParseContext ret = *this;
+	ret.m_prefix = ros::names::clean(ret.m_prefix + prefix) + "/";
+
+	return ret;
+}
+
 std::string ParseContext::evaluate(const std::string& tpl, bool simplifyWhitespace)
 {
 	std::string simplified;
@@ -168,12 +176,25 @@ void ParseContext::setRemap(const std::string& from, const std::string& to)
 LaunchConfig::LaunchConfig()
  : m_rootContext(this)
  , m_anonGen(std::random_device()())
+ , m_defaultStopTimeout(5.0)
 {
+	const char* ROS_NAMESPACE = getenv("ROS_NAMESPACE");
+	if(ROS_NAMESPACE)
+	{
+		// Someone set ROS_NAMESPACE, we should respect it.
+		// This may happen in nested situations, e.g. rosmon launching rosmon.
+		m_rootContext = m_rootContext.enterScope(ROS_NAMESPACE);
+	}
 }
 
 void LaunchConfig::setArgument(const std::string& name, const std::string& value)
 {
 	m_rootContext.setArg(name, value, true);
+}
+
+void LaunchConfig::setDefaultStopTimeout(double timeout)
+{
+	m_defaultStopTimeout = timeout;
 }
 
 void LaunchConfig::parse(const std::string& filename, bool onlyArguments)
@@ -308,6 +329,7 @@ void LaunchConfig::parseNode(TiXmlElement* element, ParseContext ctx)
 	const char* coredumpsEnabled = element->Attribute("enable-coredumps");
 	const char* cwd = element->Attribute("cwd");
 	const char* clearParams = element->Attribute("clear_params");
+	const char* stopTimeout = element->Attribute("rosmon-stop-timeout");
 
 	if(!name || !pkg || !type)
 	{
@@ -337,6 +359,25 @@ void LaunchConfig::parseNode(TiXmlElement* element, ParseContext ctx)
 			throw ctx.error("node name '{}' is not unique", node->name());
 		}
 	}
+
+	if(stopTimeout)
+	{
+		double seconds;
+		try
+		{
+			seconds = boost::lexical_cast<double>(ctx.evaluate(stopTimeout));
+		}
+		catch(boost::bad_lexical_cast&)
+		{
+			throw ctx.error("bad rosmon-stop-timeout value '{}'", stopTimeout);
+		}
+		if(seconds < 0)
+			throw ctx.error("negative rosmon-stop-timeout value '{}'", stopTimeout);
+
+		node->setStopTimeout(seconds);
+	}
+	else
+		node->setStopTimeout(m_defaultStopTimeout);
 
 	if(args)
 		node->addExtraArguments(ctx.evaluate(args));
@@ -381,7 +422,7 @@ void LaunchConfig::parseNode(TiXmlElement* element, ParseContext ctx)
 		ctx.setCurrentElement(e);
 
 		if(e->ValueStr() == "param")
-			parseParam(e, ctx);
+			parseParam(e, ctx, PARAM_IN_NODE);
 		else if(e->ValueStr() == "rosparam")
 			parseROSParam(e, ctx);
 		else if(e->ValueStr() == "remap")
@@ -430,7 +471,7 @@ static XmlRpc::XmlRpcValue autoXmlRpcValue(const std::string& fullValue)
 	}
 }
 
-void LaunchConfig::parseParam(TiXmlElement* element, ParseContext ctx)
+void LaunchConfig::parseParam(TiXmlElement* element, ParseContext ctx, ParamContext paramContext)
 {
 	const char* name = element->Attribute("name");
 	const char* value = element->Attribute("value");
@@ -451,13 +492,26 @@ void LaunchConfig::parseParam(TiXmlElement* element, ParseContext ctx)
 	}
 
 	std::string fullName = ctx.evaluate(name);
-
-	// Expand relative paths
-	if(fullName[0] != '/')
+	if(fullName.empty())
 	{
-		// We silently ignore "~" at the beginning of the name
-		if(fullName[0] == '~')
+		throw ctx.error("param name is empty");
+	}
+
+	// Expand relative paths. roslaunch ignores leading / when inside a
+	// <node> tag - god only knows why.
+	if(fullName[0] != '/' || paramContext == PARAM_IN_NODE)
+	{
+		// Same with "/" (see above)
+		if(paramContext == PARAM_IN_NODE && fullName[0] == '/')
+		{
+			ctx.warning("leading slashes in <param> names are ignored inside <node> contexts for roslaunch compatibility.");
 			fullName = fullName.substr(1);
+		}
+		else if(fullName[0] == '~')
+		{
+			// We silently ignore "~" at the beginning of the name
+			fullName = fullName.substr(1);
+		}
 
 		fullName = ctx.prefix() + fullName;
 	}
