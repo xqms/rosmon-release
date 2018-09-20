@@ -49,6 +49,7 @@ void MonGUI::initPlugin(qt_gui_cpp::PluginContext& ctx)
 	auto sortFilterProxy = new QSortFilterProxyModel(this);
 	sortFilterProxy->setSourceModel(m_model);
 	sortFilterProxy->setDynamicSortFilter(true);
+	sortFilterProxy->setSortRole(NodeModel::SortRole);
 	m_ui.tableView->setModel(sortFilterProxy);
 
 	m_ui.tableView->setSortingEnabled(true);
@@ -147,7 +148,7 @@ void MonGUI::showContextMenu(const QPoint& point)
 	if(triggered)
 	{
 		rosmon::StartStop srv;
-		srv.request.node = m_model->nodeName(index.row()).toStdString();
+		srv.request.node = index.sibling(index.row(), NodeModel::COL_NAME).data().toString().toStdString();
 		srv.request.action = triggered->property("action").toInt();
 
 		if(!ros::service::call(m_model->namespaceString().toStdString() + "/start_stop", srv))
