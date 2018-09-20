@@ -28,6 +28,11 @@ public:
 		COL_COUNT
 	};
 
+	enum Role
+	{
+		SortRole = Qt::UserRole
+	};
+
 	explicit NodeModel(ros::NodeHandle& nh, QObject* parent = nullptr);
 	~NodeModel() override = default;
 
@@ -40,7 +45,6 @@ public:
 	inline QString namespaceString() const
 	{ return m_namespace; }
 
-	QString nodeName(int row) const;
 public Q_SLOTS:
 	void setNamespace(const QString& ns);
 	void unsubscribe();

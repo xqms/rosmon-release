@@ -77,15 +77,7 @@ public:
 			m_currentLine = -1;
 	}
 
-	ParseContext enterScope(const std::string& prefix)
-	{
-		ParseContext ret = *this;
-		ret.m_prefix = ret.m_prefix + prefix;
-		if(prefix[prefix.size()-1] != '/')
-			ret.m_prefix.push_back('/');
-
-		return ret;
-	}
+	ParseContext enterScope(const std::string& prefix);
 
 	std::string evaluate(const std::string& tpl, bool simplifyWhitespace = true);
 
@@ -131,6 +123,21 @@ public:
 			return ParseException(fmt::format("{}: {}", m_filename, msg));
 		}
 	}
+
+	template<typename... Args>
+	void warning(const char* fmt, const Args& ... args) const
+	{
+		std::string msg = fmt::format(fmt, args...);
+
+		if(m_currentLine >= 0)
+		{
+			fmt::print(stderr, "{}:{}: Warning: {}\n", m_filename, m_currentLine, msg);
+		}
+		else
+		{
+			fmt::print(stderr, "{}: Warning: {}\n", m_filename, msg);
+		}
+	}
 private:
 	LaunchConfig* m_config;
 
@@ -151,6 +158,8 @@ public:
 	LaunchConfig();
 
 	void setArgument(const std::string& name, const std::string& value);
+
+	void setDefaultStopTimeout(double timeout);
 
 	void parse(const std::string& filename, bool onlyArguments = false);
 	void parseString(const std::string& input, bool onlyArguments = false);
@@ -174,11 +183,17 @@ public:
 	std::string windowTitle() const
 	{ return m_windowTitle; }
 private:
+	enum ParamContext
+	{
+		PARAM_GENERAL, //!< <param> tag inside <node>
+		PARAM_IN_NODE, //!< <param> tag everywhere else
+	};
+
 	void parseTopLevelAttributes(TiXmlElement* element);
 
 	void parse(TiXmlElement* element, ParseContext* ctx, bool onlyArguments = false);
 	void parseNode(TiXmlElement* element, ParseContext ctx);
-	void parseParam(TiXmlElement* element, ParseContext ctx);
+	void parseParam(TiXmlElement* element, ParseContext ctx, ParamContext paramContext = PARAM_GENERAL);
 	void parseROSParam(TiXmlElement* element, ParseContext ctx);
 	void parseInclude(TiXmlElement* element, ParseContext ctx);
 	void parseArgument(TiXmlElement* element, ParseContext& ctx);
@@ -212,6 +227,8 @@ private:
 	std::string m_rosmonNodeName;
 
 	std::string m_windowTitle;
+
+	double m_defaultStopTimeout;
 };
 
 }
