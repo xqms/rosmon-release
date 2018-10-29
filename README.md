@@ -1,3 +1,26 @@
+## rosmon (melodic) - 1.0.10-0
+
+The packages in the `rosmon` repository were released into the `melodic` distro by running `/usr/bin/bloom-release --rosdistro melodic rosmon` on `Mon, 29 Oct 2018 13:45:12 -0000`
+
+The `rosmon` package was released.
+
+Version of package(s) in repository `rosmon`:
+
+- upstream repository: https://github.com/xqms/rosmon.git
+- release repository: https://github.com/xqms/rosmon-release.git
+- rosdistro version: `1.0.9-0`
+- old version: `1.0.9-0`
+- new version: `1.0.10-0`
+
+Versions of tools used:
+
+- bloom version: `0.6.7`
+- catkin_pkg version: `0.4.9`
+- rosdep version: `0.12.2`
+- rosdistro version: `0.6.9`
+- vcstools version: `0.1.40`
+
+
 ## rosmon (lunar) - 1.0.9-0
 
 The packages in the `rosmon` repository were released into the `lunar` distro by running `/usr/bin/bloom-release --ros-distro lunar rosmon` on `Thu, 20 Sep 2018 10:14:07 -0000`
