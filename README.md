@@ -1,3 +1,30 @@
+## rosmon (melodic) - 2.0.2-0
+
+The packages in the `rosmon` repository were released into the `melodic` distro by running `/usr/bin/bloom-release --ros-distro melodic rosmon` on `Tue, 12 Mar 2019 22:50:10 -0000`
+
+These packages were released:
+- `rosmon`
+- `rosmon_core`
+- `rosmon_msgs`
+- `rqt_rosmon`
+
+Version of package(s) in repository `rosmon`:
+
+- upstream repository: https://github.com/xqms/rosmon.git
+- release repository: https://github.com/xqms/rosmon-release.git
+- rosdistro version: `2.0.1-0`
+- old version: `2.0.1-0`
+- new version: `2.0.2-0`
+
+Versions of tools used:
+
+- bloom version: `0.7.2`
+- catkin_pkg version: `0.4.10`
+- rosdep version: `0.15.0`
+- rosdistro version: `0.7.2`
+- vcstools version: `0.1.40`
+
+
 ## rosmon (melodic) - 2.0.1-0
 
 The packages in the `rosmon` repository were released into the `melodic` distro by running `/usr/bin/bloom-release --ros-distro melodic rosmon` on `Tue, 12 Mar 2019 10:38:24 -0000`
