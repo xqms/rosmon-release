@@ -2,6 +2,9 @@
 Changelog for package rosmon
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.0.1 (2019-03-12)
+------------------
+
 2.0.0 (2019-03-11)
 ------------------
 * split into separate packages for core, GUI, messages, PR #72
