@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
 	rosfmt
 	rosmon_msgs
 	rospack
+	diagnostic_msgs
 )
 
 catkin_package()
@@ -57,6 +58,8 @@ add_library(rosmon_launch_config
 	src/launch/substitution.cpp
 	src/launch/substitution_python.cpp
 	src/launch/yaml_params.cpp
+	src/launch/bytes_parser.cpp
+	src/launch/string_utils.cpp
 	src/package_registry.cpp
 )
 target_link_libraries(rosmon_launch_config
@@ -67,11 +70,19 @@ target_link_libraries(rosmon_launch_config
 	yaml-cpp
 )
 
+add_executable(_shim
+	src/monitor/shim.cpp
+)
+target_link_libraries(_shim
+	util
+)
+
 add_executable(rosmon
 	src/main.cpp
 	src/monitor/node_monitor.cpp
 	src/monitor/monitor.cpp
 	src/monitor/linux_process_info.cpp
+	src/diagnostics_publisher.cpp
 	src/ui.cpp
 	src/husl/husl.c
 	src/ros_interface.cpp
@@ -88,6 +99,8 @@ target_link_libraries(rosmon
 	util
 	rosmon_launch_config
 )
+
+add_dependencies(rosmon ${catkin_EXPORTED_TARGETS})
 
 if(PYTHONLIBS_FOUND)
 	target_link_libraries(rosmon
@@ -127,6 +140,7 @@ if(CATKIN_ENABLE_TESTING)
 			test/xml/test_remap.cpp
 			test/xml/test_rosparam.cpp
 			test/xml/test_subst.cpp
+			test/xml/test_memory.cpp
 		)
 		target_link_libraries(test_xml_loading
 			rosmon_launch_config
