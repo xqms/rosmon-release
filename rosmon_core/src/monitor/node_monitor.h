@@ -148,11 +148,21 @@ public:
 	inline unsigned int restartCount() const
 	{ return m_restartCount; }
 
+    inline uint64_t memoryLimit()const
+    { return m_launchNode->memoryLimitByte();}
+
+    inline float cpuLimit()const
+    { return m_launchNode->cpuLimit();}
+
 	//@}
 
 	//! Node name
 	inline std::string name() const
 	{ return m_launchNode->name(); }
+
+	//! Node namespace
+	inline std::string namespaceString() const
+	{ return m_launchNode->namespaceString(); }
 
 	//! Node PID
 	inline int pid() const
