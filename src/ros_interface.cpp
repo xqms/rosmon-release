@@ -10,15 +10,20 @@
 namespace rosmon
 {
 
-ROSInterface::ROSInterface(monitor::Monitor* monitor)
+ROSInterface::ROSInterface(monitor::Monitor* monitor, bool enableDiagnostics,
+                           const std::string& diagnosticsPrefix)
  : m_monitor(monitor)
  , m_nh("~")
+ , m_diagnosticsEnabled(enableDiagnostics)
 {
 	m_updateTimer = m_nh.createWallTimer(ros::WallDuration(1.0), boost::bind(&ROSInterface::update, this));
 
 	m_pub_state = m_nh.advertise<rosmon_msgs::State>("state", 10, true);
 
 	m_srv_startStop = m_nh.advertiseService("start_stop", &ROSInterface::handleStartStop, this);
+
+	if(m_diagnosticsEnabled)
+		m_diagnosticsPublisher.reset(new DiagnosticsPublisher(diagnosticsPrefix));
 }
 
 void ROSInterface::update()
@@ -26,10 +31,14 @@ void ROSInterface::update()
 	rosmon_msgs::State state;
 	state.header.stamp = ros::Time::now();
 
+	if(m_diagnosticsPublisher)
+		m_diagnosticsPublisher->publish(m_monitor->nodes());
+
 	for(auto& node : m_monitor->nodes())
 	{
 		rosmon_msgs::NodeState nstate;
 		nstate.name = node->name();
+		nstate.ns = node->namespaceString();
 
 		switch(node->state())
 		{
@@ -67,7 +76,7 @@ bool ROSInterface::handleStartStop(rosmon_msgs::StartStopRequest& req, rosmon_ms
 {
 	auto it = std::find_if(
 		m_monitor->nodes().begin(), m_monitor->nodes().end(),
-		[&](const monitor::NodeMonitor::ConstPtr& n){ return n->name() == req.node; }
+		[&](const monitor::NodeMonitor::ConstPtr& n){ return (n->name() == req.node) && (n->namespaceString() == req.ns); }
 	);
 
 	if(it == m_monitor->nodes().end())
