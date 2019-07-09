@@ -1,0 +1,13 @@
+Source: ros-kinetic-rqt-rosmon
+Section: misc
+Priority: extra
+Maintainer: Max Schwarz <max.schwarz@uni-bonn.de>
+Build-Depends: debhelper (>= 9.0.0), qtbase5-dev, ros-kinetic-catkin, ros-kinetic-pluginlib, ros-kinetic-roscpp, ros-kinetic-rosmon-msgs, ros-kinetic-rqt-gui, ros-kinetic-rqt-gui-cpp
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-kinetic-rqt-rosmon
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-kinetic-pluginlib, ros-kinetic-roscpp, ros-kinetic-rosmon-msgs, ros-kinetic-rqt-gui, ros-kinetic-rqt-gui-cpp
+Description: rqt GUI for rosmon, the node launcher and monitor for ROS.
+ rosmon is a replacement for the roslaunch tool, focused on performance, remote monitoring, and usability.
