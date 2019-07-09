@@ -2,6 +2,9 @@
 Changelog for package rqt_rosmon
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.1.1 (2019-07-09)
+------------------
+
 2.1.0 (2019-06-25)
 ------------------
 * handle namespaces in service calls correctly, PR #80
