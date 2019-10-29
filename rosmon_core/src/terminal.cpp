@@ -8,6 +8,11 @@
 #include <term.h>
 #include <curses.h>
 
+// really?
+#ifdef columns
+#undef columns
+#endif
+
 #include <cstdio>
 
 
@@ -23,11 +28,8 @@
 namespace rosmon
 {
 
-Terminal::Parser::Parser()
- : m_state(STATE_ESCAPE)
- , m_fgColor(-1)
- , m_bgColor(-1)
- , m_bold(false)
+Terminal::Parser::Parser(Terminal* terminal)
+ : m_term{terminal}
 {
 }
 
@@ -47,32 +49,37 @@ void Terminal::Parser::parseSetAttributes(const std::string& str)
 		if(errno != 0 || *endptr != 0)
 		{
 			// Error in specification, break out of here
-			m_fgColor = -1;
-			m_bgColor = -1;
+			m_fgColor = {};
+			m_bgColor = {};
 			return;
 		}
 
 		if(code == 0)
 		{
-			m_fgColor = -1;
-			m_bgColor = -1;
+			m_fgColor = {};
+			m_bgColor = {};
 		}
 		else if(code >= 30 && code <= 37)
-			m_fgColor = code - 30;
+			m_fgColor = m_term->color(static_cast<SimpleColor>(code - 30));
 		else if(code >= 40 && code <= 47)
-			m_bgColor = code - 40;
+			m_bgColor = m_term->color(static_cast<SimpleColor>(code - 40));
 		else if(code == 1)
 			m_bold = true;
 	}
 }
 
-void Terminal::Parser::parse(char c)
+bool Terminal::Parser::parse(char c)
 {
+	if(!m_term)
+		return false;
+
 	switch(m_state)
 	{
 		case STATE_ESCAPE:
 			if(c == '\033')
 				m_state = STATE_TYPE;
+			else
+				return true;
 			break;
 		case STATE_TYPE:
 			if(c == '[')
@@ -97,26 +104,77 @@ void Terminal::Parser::parse(char c)
 			}
 			break;
 	}
+
+	return false;
 }
 
 void Terminal::Parser::parse(const std::string& str)
 {
+	if(!m_term)
+		return;
+
 	for(char c : str)
 		parse(c);
 }
 
-void Terminal::Parser::apply(Terminal* term)
+std::vector<std::string> Terminal::Parser::wrap(const std::string& str, unsigned int columns)
 {
-	if(m_fgColor >= 0 && m_bgColor >= 0)
-		term->setSimplePair((SimpleColor)m_fgColor, (SimpleColor)m_bgColor);
-	else
+	if(!m_term)
+		return {};
+
+	unsigned int col = 0;
+	std::vector<std::string> ret;
+	std::string currentLine;
+
+	auto setupLine = [&](){
+		currentLine = m_term->standardColorCode();
+		currentLine += m_fgColor.foregroundCode();
+		currentLine += m_bgColor.backgroundCode();
+	};
+
+	setupLine();
+
+	for(char c : str)
 	{
-		term->setStandardColors();
-		if(m_fgColor >= 0)
-			term->setSimpleForeground((SimpleColor)m_fgColor);
-		else if(m_bgColor >= 0)
-			term->setSimpleBackground((SimpleColor)m_fgColor);
+		if(c == '\r' || c == '\n')
+			continue;
+
+		if(parse(c))
+			col++;
+
+		currentLine.push_back(c);
+
+		if(col == columns)
+		{
+			ret.push_back(std::move(currentLine));
+			setupLine();
+			col = 0;
+		}
 	}
+
+	if(col != 0)
+		ret.push_back(std::move(currentLine));
+
+	return ret;
+}
+
+void Terminal::Parser::apply()
+{
+	if(!m_term)
+		return;
+
+	m_term->setStandardColors();
+	m_fgColor.foreground();
+	m_bgColor.background();
+}
+
+std::string safe_tigetstr(const char* key)
+{
+	const char* ret = tigetstr(key);
+	if(!ret || ret == reinterpret_cast<const char*>(-1))
+		return {};
+
+	return ret;
 }
 
 Terminal::Terminal()
@@ -159,6 +217,7 @@ Terminal::Terminal()
 			// Sadly, there is no way to determine the Konsole version. Since
 			// any reasonably recent version supports true colors, just assume
 			// true color support
+			termOverride = "xterm-256color";
 			m_truecolor = true;
 			m_256colors = true;
 		}
@@ -166,6 +225,7 @@ Terminal::Terminal()
 		char* vte_version = getenv("VTE_VERSION");
 		if(vte_version && boost::lexical_cast<unsigned int>(vte_version) >= 3600)
 		{
+			termOverride = "xterm-256color";
 			m_256colors = true;
 			m_truecolor = true;
 		}
@@ -187,37 +247,61 @@ Terminal::Terminal()
 		m_256colors = num_colors >= 256;
 	}
 
-	{
-		const char* bgColor = tigetstr("setab");
-		if(bgColor && bgColor != (char*)-1)
-			m_bgColorStr = bgColor;
-		else
-			fmt::print("Your terminal does not support ANSI background!\n");
-	}
-	{
-		const char* fgColor = tigetstr("setaf");
-		if(fgColor && fgColor != (char*)-1)
-			m_fgColorStr = fgColor;
-		else
+	m_bgColorStr = safe_tigetstr("setab");
+	if(m_bgColorStr.empty())
+		fmt::print("Your terminal does not support ANSI background!\n");
+
+	m_fgColorStr = safe_tigetstr("setaf");
+	if(m_fgColorStr.empty())
 			fmt::print("Your terminal does not support ANSI foreground!\n");
-	}
 
-	m_opStr = tigetstr("op");
-	m_sgr0Str = tigetstr("sgr0");
-	m_elStr = tigetstr("el");
-	m_upStr = tigetstr("cuu");
+	m_opStr = safe_tigetstr("op");
+	m_sgr0Str = safe_tigetstr("sgr0");
+	m_elStr = safe_tigetstr("el");
+	m_upStr = safe_tigetstr("cuu");
 
-	m_boldStr = tigetstr("bold");
+	m_boldStr = safe_tigetstr("bold");
+
+	// The terminfo db says screen doesn't support rmam/smam, but both screen
+	// and tmux do. *sigh*
+	const char* TERM = getenv("TERM");
+	const bool isScreen = TERM && strncmp(TERM, "screen", strlen("screen")) == 0;
+
+	m_lineWrapOffStr = safe_tigetstr("rmam");
+	if(m_lineWrapOffStr.empty() && isScreen)
+		m_lineWrapOffStr = "\033[?7l";
+
+	m_lineWrapOnStr = safe_tigetstr("smam");
+	if(m_lineWrapOnStr.empty() && isScreen)
+		m_lineWrapOnStr = "\033[?7h";
+
+	auto registerKey = [&](const char* name, SpecialKey key, const std::string& fallback = ""){
+		char* code = tigetstr(name);
+
+		// Who comes up with these return codes?
+		if(code && code != reinterpret_cast<char*>(-1))
+			m_specialKeys[code] = key;
+		else if(!fallback.empty())
+			m_specialKeys[fallback] = key;
+	};
 
 	// Map function keys
 	for(int i = 0; i < 12; ++i)
 	{
-		char* code = tigetstr(fmt::format("kf{}", i+1).c_str());
-
-		// Who comes up with these return codes?
-		if(code && code != reinterpret_cast<char*>(-1))
-			m_specialKeys[code] = static_cast<SpecialKey>(SK_F1 + i);
+		registerKey(
+			fmt::format("kf{}", i+1).c_str(),
+			static_cast<SpecialKey>(SK_F1 + i)
+		);
 	}
+
+	// Backspace
+	registerKey(key_backspace, SK_Backspace);
+
+	// Arrow keys
+	registerKey(key_up, SK_Up, "\033[A");
+	registerKey(key_down, SK_Down, "\033[B");
+	registerKey(key_right, SK_Right, "\033[C");
+	registerKey(key_left, SK_Left, "\033[D");
 }
 
 bool Terminal::has256Colors() const
@@ -356,6 +440,14 @@ void Terminal::setStandardColors()
 	putp(m_sgr0Str.c_str());
 }
 
+std::string Terminal::standardColorCode()
+{
+	if(!m_valid)
+		return {};
+
+	return m_opStr + m_sgr0Str;
+}
+
 void Terminal::clearToEndOfLine()
 {
 	if(!m_valid)
@@ -375,6 +467,14 @@ void Terminal::moveCursorUp(int numLines)
 void Terminal::moveCursorToStartOfLine()
 {
 	putchar('\r');
+}
+
+void Terminal::setLineWrap(bool on)
+{
+	if(on)
+		putp(m_lineWrapOnStr.c_str());
+	else
+		putp(m_lineWrapOffStr.c_str());
 }
 
 bool Terminal::getSize(int* outColumns, int* outRows)
@@ -411,8 +511,51 @@ void Terminal::clearWindowTitle(const std::string& backup)
 	fmt::print("\033k{}\033\\", backup);
 }
 
+int Terminal::readLeftover()
+{
+	// Are we currently aborting an escape string that we did not recognize?
+	if(m_currentEscapeAborted)
+	{
+		char c = m_currentEscapeStr[m_currentEscapeAbortIdx++];
+		if(m_currentEscapeAbortIdx >= m_currentEscapeStr.size())
+		{
+			m_currentEscapeAborted = false;
+			m_currentEscapeStr.clear();
+		}
+
+		return c;
+	}
+
+	// Should we abort the current escape since it is taking too long?
+	if(!m_currentEscapeStr.empty())
+	{
+		auto now = std::chrono::steady_clock::now();
+		if(now - m_escapeStartTime > std::chrono::milliseconds(100))
+		{
+			m_currentEscapeAborted = true;
+			m_currentEscapeAbortIdx = 0;
+			return readLeftover(); // immediately return first character
+		}
+	}
+
+	return -1;
+}
+
 int Terminal::readKey()
 {
+	// Are we currently aborting an escape string that we did not recognize?
+	if(m_currentEscapeAborted)
+	{
+		char c = m_currentEscapeStr[m_currentEscapeAbortIdx++];
+		if(m_currentEscapeAbortIdx >= m_currentEscapeStr.size())
+		{
+			m_currentEscapeAborted = false;
+			m_currentEscapeStr.clear();
+		}
+
+		return c;
+	}
+
 	char c;
 	if(read(STDIN_FILENO, &c, 1) != 1)
 		return -1;
@@ -420,10 +563,13 @@ int Terminal::readKey()
 	if(m_currentEscapeStr.empty() && c == '\E')
 	{
 		m_currentEscapeStr.push_back(c);
+		m_escapeStartTime = std::chrono::steady_clock::now();
+		return -1;
 	}
 	else if(!m_currentEscapeStr.empty())
 	{
 		m_currentEscapeStr.push_back(c);
+		m_escapeStartTime = std::chrono::steady_clock::now();
 
 		std::size_t matches = 0;
 		int lastMatch = -1;
@@ -457,9 +603,36 @@ int Terminal::readKey()
 			m_currentEscapeStr.clear();
 			return lastMatch;
 		}
+		else
+			return -1;
 	}
 
+	if(c == 0x7f) // ASCII delete
+		return SK_Backspace;
+
 	return c;
+}
+
+Terminal::Color Terminal::color(SimpleColor code)
+{
+	return Color{
+		std::string{tiparm(m_fgColorStr.c_str(), code)},
+		std::string{tiparm(m_bgColorStr.c_str(), code)}
+	};
+}
+
+Terminal::Color Terminal::color(uint32_t rgb, SimpleColor fallback)
+{
+	if(!has256Colors())
+		return color(fallback);
+
+	if(!m_truecolor)
+		return color(static_cast<SimpleColor>(ansiColor(rgb)));
+
+	return Color{
+		fmt::format("\033[38;2;{};{};{}m", rgb & 0xFF, (rgb >> 8) & 0xFF, (rgb >> 16) & 0xFF),
+		fmt::format("\033[48;2;{};{};{}m", rgb & 0xFF, (rgb >> 8) & 0xFF, (rgb >> 16) & 0xFF),
+	};
 }
 
 }
