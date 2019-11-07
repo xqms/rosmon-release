@@ -1,0 +1,13 @@
+Source: ros-melodic-rosmon-core
+Section: misc
+Priority: optional
+Maintainer: Max Schwarz <max.schwarz@uni-bonn.de>
+Build-Depends: debhelper (>= 9.0.0), libboost-all-dev, libncurses5-dev, libtinyxml-dev, libyaml-cpp-dev, python-dev, python-rospkg, ros-melodic-catch-ros, ros-melodic-catkin, ros-melodic-cmake-modules, ros-melodic-diagnostic-msgs, ros-melodic-rosbash, ros-melodic-roscpp, ros-melodic-rosfmt, ros-melodic-roslib, ros-melodic-rosmon-msgs, ros-melodic-rospack, ros-melodic-rostest, ros-melodic-std-msgs
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-melodic-rosmon-core
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libboost-all-dev, libncurses5-dev, libtinyxml-dev, libyaml-cpp-dev, ros-melodic-cmake-modules, ros-melodic-diagnostic-msgs, ros-melodic-rosbash, ros-melodic-roscpp, ros-melodic-rosfmt, ros-melodic-roslib, ros-melodic-rosmon-msgs, ros-melodic-rospack, ros-melodic-std-msgs
+Description: Node launcher and monitor for ROS.
+ rosmon is a replacement for the roslaunch tool, focused on performance, remote monitoring, and usability.
