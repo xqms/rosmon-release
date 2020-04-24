@@ -59,7 +59,7 @@ Monitor::Monitor(launch::LaunchConfig::ConstPtr config, FDWatcher::Ptr watcher)
 	m_statTimer = m_nh.createWallTimer(
 #endif
 		ros::WallDuration(1.0),
-		boost::bind(&Monitor::updateStats, this)
+		boost::bind(&Monitor::updateStats, this, _1)
 	);
 }
 
@@ -74,7 +74,7 @@ void Monitor::setParameters()
 			{
 				std::string paramNamespace = node->namespaceString() + "/" + node->name() + "/";
 
-				log("Deleting parameters in namespace {}", paramNamespace.c_str());
+				logTyped(LogEvent::Type::Info, "Deleting parameters in namespace {}", paramNamespace.c_str());
 
 				if(paramNames.empty())
 				{
@@ -113,12 +113,12 @@ void Monitor::shutdown()
 
 void Monitor::forceExit()
 {
-	log("Killing the following nodes, which are refusing to exit:\n");
+	logTyped(LogEvent::Type::Warning, "Killing the following nodes, which are refusing to exit:\n");
 	for(auto& node : m_nodes)
 	{
 		if(node->running())
 		{
-			log(" - {}\n", node->name());
+			logTyped(LogEvent::Type::Warning, " - {}\n", node->name());
 			node->forceExit();
 		}
 	}
@@ -149,20 +149,34 @@ double Monitor::shutdownTimeout()
 
 void Monitor::handleRequiredNodeExit(const std::string& name)
 {
-	log("Required node '{}' exited, shutting down...", name);
+	logTyped(LogEvent::Type::Info, "Required node '{}' exited, shutting down...", name);
 	m_ok = false;
 }
 
 template<typename... Args>
-void Monitor::log(const char* fmt, const Args& ... args)
+void Monitor::log(const char* fmt, Args&& ... args)
 {
-	logMessageSignal(
+	logMessageSignal({
 		"[rosmon]",
-		fmt::format(fmt, args...)
-	);
+		fmt::format(fmt, std::forward<Args>(args)...)
+	});
 }
 
-void Monitor::updateStats()
+template<typename... Args>
+void Monitor::logTyped(LogEvent::Type type, const char* fmt, Args&& ... args)
+{
+	logMessageSignal({
+		"[rosmon]",
+		fmt::format(fmt, std::forward<Args>(args)...),
+		type
+	});
+}
+
+#if HAVE_STEADYTIMER
+void Monitor::updateStats(const ros::SteadyTimerEvent& event)
+#else
+void Monitor::updateStats(const ros::WallTimerEvent& event)
+#endif
 {
 	namespace fs = boost::filesystem;
 
@@ -218,8 +232,10 @@ void Monitor::updateStats()
 		infoIt->second.stat = stat;
 	}
 
+	double elapsedTime = (event.current_real - event.last_real).toSec();
+
 	for(auto& node : m_nodes)
-		node->endStatUpdate(process_info::kernel_hz());
+		node->endStatUpdate(elapsedTime * process_info::kernel_hz());
 
 	// Clean up old processes
 	for(auto it = m_processInfos.begin(); it != m_processInfos.end();)
