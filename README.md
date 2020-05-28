@@ -1,3 +1,30 @@
+## rosmon (noetic) - 2.3.0-1
+
+The packages in the `rosmon` repository were released into the `noetic` distro by running `/usr/bin/bloom-release --rosdistro noetic rosmon` on `Thu, 28 May 2020 08:57:09 -0000`
+
+These packages were released:
+- `rosmon`
+- `rosmon_core`
+- `rosmon_msgs`
+- `rqt_rosmon`
+
+Version of package(s) in repository `rosmon`:
+
+- upstream repository: https://github.com/xqms/rosmon.git
+- release repository: unknown
+- rosdistro version: `null`
+- old version: `null`
+- new version: `2.3.0-1`
+
+Versions of tools used:
+
+- bloom version: `0.9.7`
+- catkin_pkg version: `0.4.20`
+- rosdep version: `0.19.0`
+- rosdistro version: `0.8.1`
+- vcstools version: `0.1.42`
+
+
 ## rosmon (kinetic) - 2.2.1-1
 
 The packages in the `rosmon` repository were released into the `kinetic` distro by running `/usr/bin/bloom-release --rosdistro kinetic rosmon` on `Fri, 24 Apr 2020 09:38:15 -0000`
