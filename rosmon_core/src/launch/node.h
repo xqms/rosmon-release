@@ -42,9 +42,12 @@ public:
 
 	void setStopTimeout(double timeout);
 
-    void setMemoryLimit(uint64_t memoryLimitByte);
+	void setMemoryLimit(uint64_t memoryLimitByte);
 
-    void setCPULimit(float cpuLimit);
+	void setCPULimit(float cpuLimit);
+
+	void setMuted(bool muted);
+	void setStdoutDisplayed(bool showStdout);
 
 	std::string name() const
 	{ return m_name; }
@@ -96,11 +99,17 @@ public:
 	double stopTimeout() const
 	{ return m_stopTimeout; }
 
-    uint64_t memoryLimitByte()const
-    { return m_memoryLimitByte;}
+	uint64_t memoryLimitByte() const
+	{ return m_memoryLimitByte;}
 
-    float cpuLimit()const
-    { return m_cpuLimit; }
+	float cpuLimit() const
+	{ return m_cpuLimit; }
+
+	bool isMuted() const
+	{ return m_muted; }
+
+	bool stdoutDisplayed() const
+	{ return m_stdoutDisplayed; }
 private:
 	std::string m_name;
 	std::string m_package;
@@ -130,8 +139,11 @@ private:
 
 	double m_stopTimeout;
 
-    uint64_t m_memoryLimitByte;
-    float m_cpuLimit;
+	uint64_t m_memoryLimitByte;
+	float m_cpuLimit;
+
+	bool m_muted;
+	bool m_stdoutDisplayed;
 };
 
 }

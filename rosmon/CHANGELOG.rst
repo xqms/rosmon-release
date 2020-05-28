@@ -2,6 +2,11 @@
 Changelog for package rosmon
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.3.0 (2020-05-28)
+------------------
+* Fix Issue "Can not handle arguments with spaces" (PR #110)
+* Contributors: Kazuhiro Hiratsuka, Max Schwarz
+
 2.2.1 (2019-11-08)
 ------------------
 
