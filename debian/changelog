@@ -1,0 +1,123 @@
+ros-noetic-rosmon (2.3.1-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Wed, 27 May 2020 22:00:00 -0000
+
+ros-noetic-rosmon (2.3.0-1buster) buster; urgency=high
+
+  * Fix Issue "Can not handle arguments with spaces" (PR #110)
+  * Contributors: Kazuhiro Hiratsuka, Max Schwarz
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Wed, 27 May 2020 22:00:00 -0000
+
+ros-noetic-rosmon (2.2.1-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Thu, 07 Nov 2019 23:00:00 -0000
+
+ros-noetic-rosmon (2.2.0-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Mon, 28 Oct 2019 23:00:00 -0000
+
+ros-noetic-rosmon (2.1.1-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Mon, 08 Jul 2019 22:00:00 -0000
+
+ros-noetic-rosmon (2.1.0-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Mon, 24 Jun 2019 22:00:00 -0000
+
+ros-noetic-rosmon (2.0.2-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Mon, 11 Mar 2019 23:00:00 -0000
+
+ros-noetic-rosmon (2.0.1-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Mon, 11 Mar 2019 23:00:00 -0000
+
+ros-noetic-rosmon (2.0.0-1buster) buster; urgency=high
+
+  * split into separate packages for core, GUI, messages, PR #72
+  * Contributors: Max Schwarz
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Sun, 10 Mar 2019 23:00:00 -0000
+
+ros-noetic-rosmon (1.0.10-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Sun, 28 Oct 2018 23:00:00 -0000
+
+ros-noetic-rosmon (1.0.9-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Wed, 19 Sep 2018 22:00:00 -0000
+
+ros-noetic-rosmon (1.0.8-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Mon, 06 Aug 2018 22:00:00 -0000
+
+ros-noetic-rosmon (1.0.7-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Sat, 26 May 2018 22:00:00 -0000
+
+ros-noetic-rosmon (1.0.6-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Fri, 25 May 2018 22:00:00 -0000
+
+ros-noetic-rosmon (1.0.5-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Thu, 24 May 2018 22:00:00 -0000
+
+ros-noetic-rosmon (1.0.4-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Wed, 23 May 2018 22:00:00 -0000
+
+ros-noetic-rosmon (1.0.3-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Fri, 04 May 2018 22:00:00 -0000
+
+ros-noetic-rosmon (1.0.2-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Mon, 23 Apr 2018 22:00:00 -0000
+
+ros-noetic-rosmon (1.0.1-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Fri, 13 Apr 2018 16:55:00 -0000
+
+ros-noetic-rosmon (1.0.0-1buster) buster; urgency=high
+
+
+
+ -- Max Schwarz <max.schwarz@uni-bonn.de>  Fri, 13 Apr 2018 10:15:00 -0000
+
+
