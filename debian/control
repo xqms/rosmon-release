@@ -1,0 +1,13 @@
+Source: ros-melodic-rosmon-msgs
+Section: misc
+Priority: optional
+Maintainer: Max Schwarz <max.schwarz@uni-bonn.de>
+Build-Depends: debhelper (>= 9.0.0), ros-melodic-catkin, ros-melodic-message-generation, ros-melodic-std-msgs
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-melodic-rosmon-msgs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-melodic-message-generation, ros-melodic-std-msgs
+Description: Messages for rosmon, the node launcher and monitor for ROS.
+ rosmon is a replacement for the roslaunch tool, focused on performance, remote monitoring, and usability.
