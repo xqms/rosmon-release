@@ -25,9 +25,13 @@
 #include <boost/range.hpp>
 #include <boost/algorithm/string.hpp>
 
+#include <boost/filesystem.hpp>
+
 #include <fmt/format.h>
 
 #define TASK_COMM_LEN 16 // from linux/sched.h
+
+namespace fs = boost::filesystem;
 
 namespace
 {
@@ -76,8 +80,9 @@ namespace
 		return final_act<F>(std::forward<F>(f));
 	}
 
+	static bool g_corePatternAnalyzed = false;
 	static bool g_coreIsRelative = true;
-	static bool g_coreIsRelative_valid = false;
+	static bool g_coreIsSystemd = false;
 }
 
 namespace rosmon
@@ -89,16 +94,18 @@ NodeMonitor::NodeMonitor(launch::Node::ConstPtr launchNode, FDWatcher::Ptr fdWat
  : m_launchNode(std::move(launchNode))
  , m_fdWatcher(std::move(fdWatcher))
  , m_rxBuffer(4096)
+ , m_stderrBuffer(4096)
  , m_exitCode(0)
  , m_command(CMD_STOP) // we start in stopped state
  , m_restarting(false)
+ , m_muted(m_launchNode->isMuted())
 {
 	m_restartTimer = nh.createWallTimer(ros::WallDuration(1.0), boost::bind(&NodeMonitor::start, this), false, false);
 	m_stopCheckTimer = nh.createWallTimer(ros::WallDuration(m_launchNode->stopTimeout()), boost::bind(&NodeMonitor::checkStop, this));
 
 	m_processWorkingDirectory = m_launchNode->workingDirectory();
 
-	if(!g_coreIsRelative_valid)
+	if(!g_corePatternAnalyzed)
 	{
 		char core_pattern[256];
 		int core_fd = open("/proc/sys/kernel/core_pattern", O_RDONLY | O_CLOEXEC);
@@ -118,7 +125,11 @@ NodeMonitor::NodeMonitor(launch::Node::ConstPtr launchNode, FDWatcher::Ptr fdWat
 		}
 
 		g_coreIsRelative = (core_pattern[0] != '/');
-		g_coreIsRelative_valid = true;
+
+		if(std::string(core_pattern).find("systemd-coredump") != std::string::npos)
+			g_coreIsSystemd = true;
+
+		g_corePatternAnalyzed = true;
 	}
 }
 
@@ -205,6 +216,11 @@ void NodeMonitor::start()
 	if(openpty(&master, &slave, nullptr, nullptr, nullptr) == -1)
 		throw error("Could not open pseudo terminal for child process: {}", strerror(errno));
 
+	// For stderr, we open a separate pipe
+	int stderr_pipe[2];
+	if(pipe(stderr_pipe) != 0)
+		throw error("Could not create stderr pipe: {}", strerror(errno));
+
 	// Compose args
 	{
 		args.push_back(strdup("rosrun"));
@@ -213,6 +229,9 @@ void NodeMonitor::start()
 
 		args.push_back(strdup("--tty"));
 		args.push_back(strdup(fmt::format("{}", slave).c_str()));
+
+		args.push_back(strdup("--stderr"));
+		args.push_back(strdup(fmt::format("{}", stderr_pipe[1]).c_str()));
 
 		if(!m_launchNode->namespaceString().empty())
 		{
@@ -253,6 +272,7 @@ void NodeMonitor::start()
 	if(pid == 0)
 	{
 		close(master);
+		close(stderr_pipe[0]);
 
 		if(execvp("rosrun", args.data()) != 0)
 		{
@@ -269,10 +289,13 @@ void NodeMonitor::start()
 
 	// Parent
 	close(slave);
+	close(stderr_pipe[1]);
 
 	m_fd = master;
+	m_stderrFD = stderr_pipe[0];
 	m_pid = pid;
 	m_fdWatcher->registerFD(m_fd, boost::bind(&NodeMonitor::communicate, this));
+	m_fdWatcher->registerFD(m_stderrFD, boost::bind(&NodeMonitor::communicateStderr, this));
 }
 
 void NodeMonitor::stop(bool restart)
@@ -353,8 +376,71 @@ NodeMonitor::State NodeMonitor::state() const
 	return STATE_CRASHED;
 }
 
+void NodeMonitor::communicateStderr()
+{
+	auto handleByte = [&](char c){
+		m_stderrBuffer.push_back(c);
+		if(c == '\n')
+		{
+			m_stderrBuffer.push_back(0);
+			m_stderrBuffer.linearize();
+
+			auto one = m_stderrBuffer.array_one();
+
+			LogEvent event{name(), one.first};
+			event.muted = isMuted();
+			event.channel = LogEvent::Channel::Stderr;
+
+			logMessageSignal(std::move(event));
+
+			m_stderrBuffer.clear();
+		}
+	};
+
+	char buf[1024];
+	int bytes = read(m_stderrFD, buf, sizeof(buf));
+
+	if(bytes == 0)
+	{
+		// Flush out any remaining stdout
+		if(!m_stderrBuffer.empty())
+			handleByte('\n');
+
+		m_fdWatcher->removeFD(m_stderrFD);
+		return; // handled in communicate()
+	}
+
+	if(bytes < 0)
+		throw error("{}: Could not read: {}", name(), strerror(errno));
+
+	for(int i = 0; i < bytes; ++i)
+	{
+		handleByte(buf[i]);
+	}
+}
+
 void NodeMonitor::communicate()
 {
+	auto handleByte = [&](char c){
+		m_rxBuffer.push_back(c);
+		if(c == '\n')
+		{
+			m_rxBuffer.push_back(0);
+			m_rxBuffer.linearize();
+
+			auto one = m_rxBuffer.array_one();
+
+			LogEvent event{name(), one.first};
+			event.muted = isMuted();
+			event.channel = LogEvent::Channel::Stdout;
+			event.showStdout = m_launchNode->stdoutDisplayed();
+
+			logMessageSignal(std::move(event));
+
+			m_rxBuffer.clear();
+		}
+	};
+
 	char buf[1024];
 	int bytes = read(m_fd, buf, sizeof(buf));
 
@@ -372,6 +458,10 @@ void NodeMonitor::communicate()
 
 			throw error("{}: Could not waitpid(): {}", m_launchNode->name(), strerror(errno));
 		}
+
+		// Flush out any remaining stdout
+		if(!m_rxBuffer.empty())
+			handleByte('\n');
 
 		if(WIFEXITED(status))
 		{
@@ -405,12 +495,38 @@ void NodeMonitor::communicate()
 
 		if(m_processWorkingDirectoryCreated)
 		{
+			// Our removal strategy is two-fold: After a process exits,
+			// we immediately try to delete the temporary working directory.
+			// If that fails (e.g. because there is a core dump in there),
+			// we remember the directory in m_lastWorkingDirectory.
+
+			// and then delete it recursively on the next process exit.
+			// That way, we always keep the last core dump around, but prevent
+			// infinite pile-up.
+			if(!m_lastWorkingDirectory.empty())
+			{
+				boost::system::error_code error;
+				boost::filesystem::remove_all(m_lastWorkingDirectory, error);
+				if(error)
+				{
+					logTyped(LogEvent::Type::Warning,
+						"Could not remove old working directory '{}' after process died twice: {}",
+						m_lastWorkingDirectory, error.message()
+					);
+				}
+
+				m_lastWorkingDirectory.clear();
+			}
+
 			if(rmdir(m_processWorkingDirectory.c_str()) != 0)
 			{
 				logTyped(LogEvent::Type::Warning, "Could not remove process working directory '{}' after process exit: {}",
 					m_processWorkingDirectory, strerror(errno)
 				);
+
+				m_lastWorkingDirectory = m_processWorkingDirectory;
 			}
+
 			m_processWorkingDirectory.clear();
 		}
 
@@ -441,17 +557,7 @@ void NodeMonitor::communicate()
 
 	for(int i = 0; i < bytes; ++i)
 	{
-		m_rxBuffer.push_back(buf[i]);
-		if(buf[i] == '\n')
-		{
-			m_rxBuffer.push_back(0);
-			m_rxBuffer.linearize();
-
-			auto one = m_rxBuffer.array_one();
-			logMessageSignal({name(), one.first});
-
-			m_rxBuffer.clear();
-		}
+		handleByte(buf[i]);
 	}
 }
 
@@ -481,6 +587,14 @@ corePatternFormatFinder(std::string::const_iterator begin, std::string::const_it
 
 void NodeMonitor::gatherCoredump(int signal)
 {
+	// If systemd-coredump is enabled, our job is easy
+	if(g_coreIsSystemd)
+	{
+		m_debuggerCommand = fmt::format("coredumpctl gdb COREDUMP_PID={}", m_pid);
+		return;
+	}
+
+	// Otherwise we have to find the core ourselves...
 	char core_pattern[256];
 	int core_fd = open("/proc/sys/kernel/core_pattern", O_RDONLY | O_CLOEXEC);
 	if(core_fd < 0)
@@ -654,6 +768,11 @@ void NodeMonitor::endStatUpdate(double elapsedTimeInTicks)
 {
 	m_userLoad = m_userTime / elapsedTimeInTicks;
 	m_systemLoad = m_systemTime / elapsedTimeInTicks;
+}
+
+void NodeMonitor::setMuted(bool muted)
+{
+	m_muted = muted;
 }
 
 }
