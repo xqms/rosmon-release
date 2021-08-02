@@ -354,6 +354,7 @@ void LaunchConfig::parseNode(TiXmlElement* element, ParseContext& attr_ctx)
 	const char* ns = element->Attribute("ns");
 	const char* respawn = element->Attribute("respawn");
 	const char* respawnDelay = element->Attribute("respawn_delay");
+	const char* nRespawnsAllowed = element->Attribute("rosmon-restart-warn-threshold");
 	const char* required = element->Attribute("required");
 	const char* launchPrefix = element->Attribute("launch-prefix");
 	const char* cwd = element->Attribute("cwd");
@@ -423,6 +424,21 @@ void LaunchConfig::parseNode(TiXmlElement* element, ParseContext& attr_ctx)
 			}
 
 			node->setRespawnDelay(ros::WallDuration(seconds));
+		}
+
+		if (nRespawnsAllowed)
+		{
+			int n_respawns;
+			try
+			{
+				n_respawns = boost::lexical_cast<int>(attr_ctx.evaluate(nRespawnsAllowed));
+			}
+			catch(boost::bad_lexical_cast&)
+			{
+				throw ctx.error("bad rosmon-restart-warn-threshold value '{}'", nRespawnsAllowed);
+			}
+
+			node->setNumRespawnsAllowed(n_respawns);
 		}
 	}
 
@@ -514,7 +530,7 @@ static XmlRpc::XmlRpcValue autoXmlRpcValue(const std::string& fullValue)
 		try { return boost::lexical_cast<int>(fullValue); }
 		catch(boost::bad_lexical_cast&) {}
 
-		try { return boost::lexical_cast<float>(fullValue); }
+		try { return boost::lexical_cast<double>(fullValue); }
 		catch(boost::bad_lexical_cast&) {}
 
 		return fullValue;
@@ -599,7 +615,15 @@ void LaunchConfig::parseParam(TiXmlElement* element, ParseContext& ctx, ParamCon
 		}
 		else
 		{
-			m_params[fullName] = paramToXmlRpc(ctx, ctx.evaluate(value), fullType);
+			// Note: roslaunch strips leading/trailing whitespace of all simple
+			// parameters. Furthermore, line feeds and tabs are replaced with
+			// space characters.
+			m_params[fullName] = paramToXmlRpc(ctx,
+				string_utils::convertWhitespace(
+					string_utils::strip(ctx.evaluate(value, false))
+				),
+				fullType
+			);
 
 			// A dynamic parameter of the same name gets overwritten now
 			m_paramJobs.erase(fullName);
@@ -641,6 +665,23 @@ void LaunchConfig::parseParam(TiXmlElement* element, ParseContext& ctx, ParamCon
 	//     case of YAML-typed parameters).
 
 	auto computeString = std::make_shared<std::future<std::string>>();
+
+	// On ROS < Lunar, type="..." is not respected for command= and textfile=
+	// attributes. We support that anyway, but print a nice warning for users.
+	// See GH issue #138.
+
+#if !ROS_VERSION_MINIMUM(1,13,0)
+	if(type)
+	{
+		ctx.warning(
+			"On ROS versions prior to Lunar, roslaunch does not respect the "
+			"type attribute on <param> tags with command= or textfile= "
+			"actions. However, rosmon does support it and will create the "
+			"properly typed parameter {}.",
+			fullName
+		);
+	}
+#endif
 
 	if(command)
 	{
@@ -798,20 +839,21 @@ XmlRpc::XmlRpcValue LaunchConfig::paramToXmlRpc(const ParseContext& ctx, const s
 	try
 	{
 		if(type == "int")
-			return boost::lexical_cast<int>(value);
+			return boost::lexical_cast<int>(string_utils::strip(value));
 		else if(type == "double")
-			return boost::lexical_cast<double>(value);
+			return boost::lexical_cast<double>(string_utils::strip(value));
 		else if(type == "bool" || type == "boolean")
 		{
-			std::string value_lowercase = boost::algorithm::to_lower_copy(value);
+			std::string value_lowercase = boost::algorithm::to_lower_copy(
+				string_utils::strip(value)
+			);
+
 			if(value_lowercase == "true")
 				return true;
 			else if(value_lowercase == "false")
 				return false;
 			else
-			{
 				throw ctx.error("invalid boolean value '{}'", value);
-			}
 		}
 		else if(type == "str" || type == "string")
 			return value;
@@ -927,9 +969,14 @@ void LaunchConfig::loadYAMLParams(const ParseContext& ctx, const YAML::Node& n, 
 			// Pass 2: Everything else.
 			for(YAML::const_iterator it = n.begin(); it != n.end(); ++it)
 			{
-				if(it->first.as<std::string>() != "<<")
+				auto key = it->first.as<std::string>();
+				if(key != "<<")
 				{
-					loadYAMLParams(ctx, it->second, prefix + "/" + it->first.as<std::string>());
+					// Load "global" params without prefix (see #130)
+					if(!key.empty() && key[0] == '/')
+						loadYAMLParams(ctx, it->second, key);
+					else
+						loadYAMLParams(ctx, it->second, prefix + "/" + it->first.as<std::string>());
 				}
 			}
 
