@@ -102,6 +102,11 @@ void Node::setRespawnDelay(const ros::WallDuration& respawnDelay)
 	m_respawnDelay = respawnDelay;
 }
 
+void Node::setNumRespawnsAllowed(int numRespawnsAllowed)
+{
+	m_numRespawnsAllowed = numRespawnsAllowed;
+}
+
 void Node::setLaunchPrefix(const std::string& launchPrefix)
 {
 	wordexp_t tokens;
@@ -152,7 +157,7 @@ void Node::setMemoryLimit(uint64_t memoryLimitByte)
 	m_memoryLimitByte = memoryLimitByte;
 }
 
-void Node::setCPULimit(float cpuLimit)
+void Node::setCPULimit(double cpuLimit)
 {
 	m_cpuLimit = cpuLimit;
 }
