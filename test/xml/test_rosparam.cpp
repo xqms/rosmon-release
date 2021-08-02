@@ -205,6 +205,10 @@ class6:
   &lt;&lt;: *commonclass
   testclass:
     param2: 10.0
+array:
+  - &lt;&lt;: *common
+    A: 23
+    C: 99
 </rosparam>
 		</launch>
 	)EOF");
@@ -255,4 +259,48 @@ class6:
 	checkTypedParam<std::string>(params, class_ns + "/testclass/param3", XmlRpc::XmlRpcValue::TypeString, "hello");
 	checkTypedParam<int>(params, class_ns + "/testclass/testparam", XmlRpc::XmlRpcValue::TypeInt, 140);
 
+	{
+		// Structs in arrays (#150)
+		auto array = getTypedParam<XmlRpc::XmlRpcValue>(params, "/array", XmlRpc::XmlRpcValue::TypeArray);
+		REQUIRE(array.size() == 1);
+		auto element = array[0];
+		REQUIRE(element.getType() == XmlRpc::XmlRpcValue::TypeStruct);
+
+		CAPTURE(element);
+		CHECK(element.hasMember("A"));
+		CHECK(static_cast<int>(element["A"]) == 23);
+		CHECK(element.hasMember("param1"));
+		CHECK(static_cast<bool>(element["param1"]) == true);
+	}
+}
+
+TEST_CASE("rosparam /param", "[rosparam]")
+{
+	LaunchConfig config;
+	config.parseString(R"EOF(
+		<launch>
+<rosparam ns="ns">
+/fake_param: 20.0
+namespace:
+  /other_param: 10.0
+  /global_ns:
+    third_param: 5.0
+</rosparam>
+		</launch>
+	)EOF");
+
+	config.evaluateParameters();
+
+	CAPTURE(config.parameters());
+
+	auto& params = config.parameters();
+
+	double param1 = getTypedParam<double>(params, "/fake_param", XmlRpc::XmlRpcValue::TypeDouble);
+	CHECK(param1 == Approx(20.0));
+
+	double param2 = getTypedParam<double>(params, "/other_param", XmlRpc::XmlRpcValue::TypeDouble);
+	CHECK(param2 == Approx(10.0));
+
+	double param3 = getTypedParam<double>(params, "/global_ns/third_param", XmlRpc::XmlRpcValue::TypeDouble);
+	CHECK(param3 == Approx(5.0));
 }
