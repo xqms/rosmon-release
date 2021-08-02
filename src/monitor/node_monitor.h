@@ -143,16 +143,19 @@ public:
 	 *
 	 * @return Memory usage in bytes
 	 **/
-	inline double memory() const
+	inline uint64_t memory() const
 	{ return m_memory; }
 
 	inline unsigned int restartCount() const
 	{ return m_restartCount; }
 
+	inline int numRespawnsAllowed() const
+	{ return m_launchNode->numRespawnsAllowed(); }
+
 	inline uint64_t memoryLimit() const
 	{ return m_launchNode->memoryLimitByte();}
 
-	inline float cpuLimit() const
+	inline double cpuLimit() const
 	{ return m_launchNode->cpuLimit();}
 
 	//@}
@@ -164,6 +167,12 @@ public:
 	//! Node namespace
 	inline std::string namespaceString() const
 	{ return m_launchNode->namespaceString(); }
+
+	//! Full name including namespace
+	inline std::string fullName() const
+	{
+		return namespaceString() + "/" + name();
+	}
 
 	//! Node PID
 	inline int pid() const
@@ -208,6 +217,8 @@ private:
 
 	void checkStop();
 	void gatherCoredump(int signal);
+
+	std::pair<int,int> createPTY();
 
 	launch::Node::ConstPtr m_launchNode;
 
