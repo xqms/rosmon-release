@@ -33,6 +33,7 @@ public:
 
 	void setRespawn(bool respawn);
 	void setRespawnDelay(const ros::WallDuration& respawnDelay);
+	void setNumRespawnsAllowed(int numRespawnsAllowed);
 
 	void setLaunchPrefix(const std::string& launchPrefix);
 
@@ -44,7 +45,7 @@ public:
 
 	void setMemoryLimit(uint64_t memoryLimitByte);
 
-	void setCPULimit(float cpuLimit);
+	void setCPULimit(double cpuLimit);
 
 	void setMuted(bool muted);
 	void setStdoutDisplayed(bool showStdout);
@@ -79,6 +80,9 @@ public:
 	ros::WallDuration respawnDelay() const
 	{ return m_respawnDelay; }
 
+	int numRespawnsAllowed() const
+	{ return m_numRespawnsAllowed; }
+
 	void setRequired(bool required);
 
 	bool required() const
@@ -102,7 +106,7 @@ public:
 	uint64_t memoryLimitByte() const
 	{ return m_memoryLimitByte;}
 
-	float cpuLimit() const
+	double cpuLimit() const
 	{ return m_cpuLimit; }
 
 	bool isMuted() const
@@ -126,6 +130,7 @@ private:
 
 	bool m_respawn;
 	ros::WallDuration m_respawnDelay;
+	int m_numRespawnsAllowed = 0;  // Will warn on any respawn by default
 
 	bool m_required;
 
@@ -140,7 +145,7 @@ private:
 	double m_stopTimeout;
 
 	uint64_t m_memoryLimitByte;
-	float m_cpuLimit;
+	double m_cpuLimit;
 
 	bool m_muted;
 	bool m_stdoutDisplayed;
