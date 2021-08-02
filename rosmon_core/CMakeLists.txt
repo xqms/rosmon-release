@@ -34,7 +34,7 @@ else()
 endif()
 
 # Newer boost versions need a specific python version
-if(${PYTHON_VERSION_MAJOR} GREATER_EQUAL 3)
+if(${PYTHON_VERSION_MAJOR} GREATER 2)
 	set(boost_python_component "python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR}")
 else()
 	set(boost_python_component "python")
@@ -120,6 +120,12 @@ endif()
 add_executable(abort
 	src/util/abort.cpp
 )
+add_executable(dump_param
+	src/util/dump_param.cpp
+)
+target_link_libraries(dump_param
+	${catkin_LIBRARIES}
+)
 
 add_executable(abort_really_long_executable
 	src/util/abort.cpp
@@ -157,9 +163,11 @@ if(CATKIN_ENABLE_TESTING)
 	else()
 		message(WARNING "Install catch_ros to enable XML unit tests")
 	endif()
+
+	install(DIRECTORY test DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 endif()
 
-# Version 1.5 (increment this comment to trigger a CMake update)
+# Version 1.6 (increment this comment to trigger a CMake update)
 catkin_add_env_hooks(50-rosmon
 	SHELLS bash zsh
 	DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/env-hooks
