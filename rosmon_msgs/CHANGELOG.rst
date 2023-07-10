@@ -2,6 +2,9 @@
 Changelog for package rosmon
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.5.0 (2023-07-10)
+------------------
+
 2.4.0 (2021-08-02)
 ------------------
 * Increase cmake minimum version to 3.4
