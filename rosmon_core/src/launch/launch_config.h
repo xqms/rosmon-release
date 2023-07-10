@@ -198,8 +198,14 @@ public:
 
 	void setOutputAttrMode(OutputAttr mode);
 
+	void setNodeLogDir(const std::string& logDir);
+	std::string nodeLogDir() const
+	{ return m_nodeLogDir; }
+
 	void parse(const std::string& filename, bool onlyArguments = false);
 	void parseString(const std::string& input, bool onlyArguments = false);
+
+	void applyAutoIncrementSpawnDelayToAll(const ros::WallDuration& autoIncrementSpawnDelay);
 
 	void evaluateParameters();
 
@@ -237,7 +243,7 @@ private:
 	void parseNode(TiXmlElement* element, ParseContext& ctx);
 	void parseParam(TiXmlElement* element, ParseContext& ctx, ParamContext paramContext = PARAM_GENERAL);
 	void parseROSParam(TiXmlElement* element, ParseContext& ctx);
-	void parseInclude(TiXmlElement* element, ParseContext ctx);
+	void parseInclude(TiXmlElement* element, ParseContext& ctx);
 	void parseArgument(TiXmlElement* element, ParseContext& ctx);
 	void parseEnv(TiXmlElement* element, ParseContext& ctx);
 	void parseRemap(TiXmlElement* element, ParseContext& ctx);
@@ -274,6 +280,8 @@ private:
 	bool m_disableUI = false;
 
 	std::ostream* m_warningOutput = &std::cerr;
+
+	std::string m_nodeLogDir;
 };
 
 template<typename... Args>
