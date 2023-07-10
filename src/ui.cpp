@@ -428,7 +428,7 @@ void UI::log(const LogEvent& event)
 	if(event.channel == LogEvent::Channel::Stdout && (!event.showStdout || stderrOnly()))
 		return;
 
-	const std::string& clean = event.message;
+	std::string clean = event.coloredString();
 
 	auto it = m_nodeColorMap.find(event.source);
 
@@ -438,7 +438,8 @@ void UI::log(const LogEvent& event)
 		m_term.setLineWrap(false);
 
 		auto actualLabelWidth = std::max<unsigned int>(m_nodeLabelWidth, event.source.size());
-		auto lines = it->second.parser.wrap(clean, m_columns - actualLabelWidth - 2);
+		auto& parser = (event.channel == LogEvent::Channel::Stderr) ? it->second.stderrParser : it->second.stdoutParser;
+		auto lines = parser.wrap(clean, m_columns - actualLabelWidth - 2);
 
 		for(unsigned int line = 0; line < lines.size(); ++line)
 		{
@@ -489,6 +490,9 @@ void UI::log(const LogEvent& event)
 		{
 			case LogEvent::Type::Raw:
 			case LogEvent::Type::Info:
+				break;
+			case LogEvent::Type::Debug:
+				m_term.setSimpleForeground(Terminal::Green);
 				break;
 			case LogEvent::Type::Warning:
 				m_term.setSimpleForeground(Terminal::Yellow);
