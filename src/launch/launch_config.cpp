@@ -34,7 +34,9 @@ const char* UNSET_MARKER = "~~~~~ ROSMON-UNSET ~~~~~";
 ParseContext ParseContext::enterScope(const std::string& prefix)
 {
 	ParseContext ret = *this;
-	ret.m_prefix = ros::names::clean(ret.m_prefix + prefix) + "/";
+
+	const bool global_prefix = (!prefix.empty() && prefix.front() == '/');
+	ret.m_prefix = ros::names::clean(global_prefix ? prefix : (ret.m_prefix + prefix)) + "/";
 
 	return ret;
 }
@@ -269,6 +271,20 @@ void LaunchConfig::parseString(const std::string& input, bool onlyArguments)
 		fmt::print("Loaded launch file in {:f}s\n", (ros::WallTime::now() - start).toSec());
 }
 
+void LaunchConfig::applyAutoIncrementSpawnDelayToAll(const ros::WallDuration& autoIncrementSpawnDelay)
+{
+	ros::WallDuration currentDelay(0, 0);
+
+	for(auto& node : m_nodes)
+	{
+		if(node->spawnDelay().isZero())
+		{
+			node->setSpawnDelay(currentDelay);
+			currentDelay += autoIncrementSpawnDelay;
+		}
+	}
+}
+
 void LaunchConfig::parseTopLevelAttributes(TiXmlElement* element)
 {
 	const char* name = element->Attribute("rosmon-name");
@@ -360,6 +376,7 @@ void LaunchConfig::parseNode(TiXmlElement* element, ParseContext& attr_ctx)
 	const char* cwd = element->Attribute("cwd");
 	const char* clearParams = element->Attribute("clear_params");
 	const char* output = element->Attribute("output");
+	const char* spawnDelay = element->Attribute("rosmon-spawn-delay");
 
 	if(!name || !pkg || !type)
 	{
@@ -440,6 +457,21 @@ void LaunchConfig::parseNode(TiXmlElement* element, ParseContext& attr_ctx)
 
 			node->setNumRespawnsAllowed(n_respawns);
 		}
+	}
+
+	if(spawnDelay)
+	{
+		double seconds;
+		try
+		{
+			seconds = boost::lexical_cast<double>(attr_ctx.evaluate(spawnDelay));
+		}
+		catch(boost::bad_lexical_cast&)
+		{
+			throw ctx.error("bad spawn_delay value '{}'", spawnDelay);
+		}
+
+		node->setSpawnDelay(ros::WallDuration(seconds));
 	}
 
 	if(required && attr_ctx.parseBool(required, element->Row()))
@@ -1003,12 +1035,13 @@ void LaunchConfig::loadYAMLParams(const ParseContext& ctx, const YAML::Node& n, 
 	}
 }
 
-void LaunchConfig::parseInclude(TiXmlElement* element, ParseContext ctx)
+void LaunchConfig::parseInclude(TiXmlElement* element, ParseContext& ctx)
 {
 	const char* file = element->Attribute("file");
 	const char* ns = element->Attribute("ns");
 	const char* passAllArgs = element->Attribute("pass_all_args");
 	const char* clearParams = element->Attribute("clear_params");
+	const char* importArgs = element->Attribute("rosmon-import-args");
 
 	if(!file)
 		throw ctx.error("<include> file attribute is mandatory");
@@ -1077,6 +1110,13 @@ void LaunchConfig::parseInclude(TiXmlElement* element, ParseContext ctx)
 	childCtx.setFilename(fullFile);
 
 	parse(document.RootElement(), &childCtx);
+
+	// Import args from child context if requested
+	if(importArgs && ctx.parseBool(importArgs, element->Row()))
+	{
+		for(auto& pair : childCtx.arguments())
+			ctx.setArg(pair.first, pair.second, true);
+	}
 }
 
 void LaunchConfig::parseArgument(TiXmlElement* element, ParseContext& ctx)
@@ -1223,6 +1263,11 @@ void LaunchConfig::setOutputAttrMode(OutputAttr mode)
 void LaunchConfig::setWarningOutput(std::ostream* output)
 {
 	m_warningOutput = output;
+}
+
+void LaunchConfig::setNodeLogDir(const std::string& dir)
+{
+	m_nodeLogDir = dir;
 }
 
 }
