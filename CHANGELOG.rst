@@ -2,6 +2,9 @@
 Changelog for package rqt_rosmon
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.5.0 (2023-07-10)
+------------------
+
 2.4.0 (2021-08-02)
 ------------------
 * Fix -Wfloat-conversion warnings
