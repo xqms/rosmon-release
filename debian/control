@@ -1,0 +1,13 @@
+Source: ros-noetic-rosmon-core
+Section: misc
+Priority: optional
+Maintainer: Max Schwarz <max.schwarz@uni-bonn.de>
+Build-Depends: debhelper (>= 9.0.0), libboost-all-dev, libboost-python-dev, libncurses5-dev, libtinyxml-dev, libyaml-cpp-dev, python3-dev, python3-rospkg <!nocheck>, ros-noetic-catch-ros <!nocheck>, ros-noetic-catkin, ros-noetic-cmake-modules, ros-noetic-diagnostic-msgs, ros-noetic-rosbash, ros-noetic-roscpp, ros-noetic-rosfmt, ros-noetic-roslib, ros-noetic-rosmon-msgs, ros-noetic-rospack, ros-noetic-rostest <!nocheck>, ros-noetic-std-msgs
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-noetic-rosmon-core
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libboost-all-dev, libboost-python-dev, libncurses5-dev, libtinyxml-dev, libyaml-cpp-dev, ros-noetic-cmake-modules, ros-noetic-diagnostic-msgs, ros-noetic-rosbash, ros-noetic-roscpp, ros-noetic-rosfmt, ros-noetic-roslib, ros-noetic-rosmon-msgs, ros-noetic-rospack, ros-noetic-std-msgs
+Description: Node launcher and monitor for ROS.
+ rosmon is a replacement for the roslaunch tool, focused on performance, remote monitoring, and usability.
